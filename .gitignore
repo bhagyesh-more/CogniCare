@@ -46,7 +46,6 @@ reports/
 .amazonq
 
 DEVELOPER.md
-test_inference.py
 workflow.md
 scratch
 INFO
