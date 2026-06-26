@@ -1,0 +1,46 @@
+# Model files
+*.pkl
+
+# CSV
+*.csv
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Ignore large dataset files
+data/**/*.pkl
+
+# Ignore generated output
+output/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Environment
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# Dataset
+data/**/*.pkl
+
+# SQLite database
+data/*.db
+
+# Generated outputs
+output/
+reports/
+
+# Logs
+*.log
+
+#memory dump
+.amazonq

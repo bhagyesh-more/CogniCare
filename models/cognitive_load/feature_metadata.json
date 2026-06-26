@@ -1,0 +1,43 @@
+{
+  "target": "cognitive_load",
+  "feature_cols": [
+    "eda_mean",
+    "eda_std",
+    "eda_peak_count",
+    "eda_peak_amplitude",
+    "heart_rate_bpm",
+    "rmssd",
+    "sdnn",
+    "resp_rate_bpm",
+    "resp_variability"
+  ],
+  "classes": [
+    "High",
+    "Low"
+  ],
+  "n_samples": 178,
+  "rf_params": {
+    "n_estimators": 300,
+    "max_depth": null,
+    "min_samples_split": 4,
+    "min_samples_leaf": 2,
+    "class_weight": "balanced",
+    "random_state": 42,
+    "n_jobs": -1
+  },
+  "metrics": {
+    "target": "cognitive_load",
+    "classes": [
+      "High",
+      "Low"
+    ],
+    "n_samples": 178,
+    "train_accuracy": 0.9943820224719101,
+    "cv_accuracy": 0.943968253968254,
+    "cv_accuracy_std": 0.0396304419919422,
+    "cv_f1_macro": 0.9290485933974164,
+    "cv_f1_std": 0.05235142746217635,
+    "cv_precision": 0.9388939763939763,
+    "cv_recall": 0.9241538461538461
+  }
+}
