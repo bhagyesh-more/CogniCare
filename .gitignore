@@ -1,5 +1,6 @@
 # Model files
 *.pkl
+!models/**/*.pkl
 
 # CSV
 *.csv
@@ -11,7 +12,8 @@
 data/**/*.pkl
 
 # Ignore generated output
-output/
+output/*
+!output/feature_dataset.csv
 
 # Python cache
 __pycache__/
@@ -40,7 +42,6 @@ data/**/*.pkl
 data/*.db
 
 # Generated outputs
-output/
 reports/
 
 # Logs
