@@ -1,11 +1,18 @@
+# Core data stack
 numpy>=1.26
 pandas>=2.2
-scikit-learn>=1.4
 scipy>=1.13
+
+# Machine learning & explainability
+scikit-learn>=1.4
 shap>=0.44
+joblib>=1.4
+
+# Streamlit UI & visualisation
 streamlit>=1.35
 plotly>=5.18
-joblib>=1.4
+
+# PDF & image report generation
 fpdf2>=2.7
 reportlab>=4.0
 pillow>=9.0

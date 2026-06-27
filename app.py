@@ -5,6 +5,7 @@ Entry point for clinicians and medical administrators.
 """
 
 import logging
+import os
 import time
 from pathlib import Path
 
@@ -40,6 +41,33 @@ from src.validator import Validator
 from src.database import DatabaseService
 
 logging.basicConfig(level=logging.WARNING)
+
+
+def _load_secrets() -> None:
+    """Bridge st.secrets → environment variables so non-Streamlit modules
+    (e.g. src/database.py) can read credentials via os.environ.get().
+    Safe to call multiple times; only sets vars that are not already present.
+    Falls back silently when running locally without a secrets.toml.
+    """
+    MAPPING = {
+        "secret_salt":          "COGNICARE_SECRET_SALT",
+        "demo_hospital_name":   "DEMO_HOSPITAL_NAME",
+        "demo_clinic_code":     "DEMO_CLINIC_CODE",
+        "demo_doctor_name":     "DEMO_DOCTOR_NAME",
+        "demo_doctor_email":    "DEMO_DOCTOR_EMAIL",
+        "demo_doctor_password": "DEMO_DOCTOR_PASSWORD",
+    }
+    try:
+        section = st.secrets.get("cognicare", {})
+        for secret_key, env_key in MAPPING.items():
+            if secret_key in section and env_key not in os.environ:
+                os.environ[env_key] = str(section[secret_key])
+    except Exception:
+        pass  # No secrets file locally — database.py will use safe defaults
+
+
+# Load secrets as early as possible (before DatabaseService is created)
+_load_secrets()
 
 FEATURE_CSV = Path("output/feature_dataset.csv")
 MODELS_DIR  = Path("models")

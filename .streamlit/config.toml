@@ -1,0 +1,13 @@
+[server]
+# Required for Streamlit Community Cloud and containerized hosting
+headless = true
+enableCORS = false
+enableXsrfProtection = true
+
+[browser]
+# Disable usage statistics collection
+gatherUsageStats = false
+
+[runner]
+# Silence the deprecation warnings about use_container_width in logs
+magicEnabled = false

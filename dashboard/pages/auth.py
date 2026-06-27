@@ -29,7 +29,7 @@ def render(db_service, on_auth_success, on_cancel) -> None:
         """, unsafe_allow_html=True)
 
         with st.form("doctor_login_form"):
-            login_email = st.text_input("Clinician Email", placeholder="evelyn@cognicare.com", key="login_em").strip()
+            login_email = st.text_input("Clinician Email", placeholder="doctor@clinic.com", key="login_em").strip()
             login_pwd = st.text_input("Password", type="password", placeholder="••••••••", key="login_pw")
             
             st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
@@ -47,13 +47,7 @@ def render(db_service, on_auth_success, on_cancel) -> None:
                     else:
                         st.error("Invalid clinician credentials. Please check email/password or register your account.")
 
-        st.markdown(f"""
-        <div style="margin-top:16px;font-size:0.7rem;color:{C['secondary']};font-family:var(--font-data)">
-            <strong>Default Review Credentials:</strong><br>
-            Email: <code style="color:{C['cyan']}">evelyn@cognicare.com</code> &nbsp;|&nbsp; 
-            Password: <code style="color:{C['cyan']}">password123</code> (Clinic Code: <code>NEO-GEN</code>)
-        </div>
-        """, unsafe_allow_html=True)
+
 
     # ── Tab 2: Doctor Registration ────────────────────────────────────
     with tab_register_doc:
@@ -67,7 +61,7 @@ def render(db_service, on_auth_success, on_cancel) -> None:
         """, unsafe_allow_html=True)
 
         with st.form("doctor_register_form"):
-            reg_clinic_code = st.text_input("Clinic Registration Code", placeholder="NEO-GEN", key="reg_cc").strip().upper()
+            reg_clinic_code = st.text_input("Clinic Registration Code", placeholder="e.g. YOUR-CODE", key="reg_cc").strip().upper()
             reg_name = st.text_input("Full Name (with credentials)", placeholder="Dr. Evelyn Vance, MD", key="reg_nm")
             reg_email = st.text_input("Email Address", placeholder="doctor@clinic.com", key="reg_em").strip()
             reg_pwd = st.text_input("Password", type="password", placeholder="Minimum 6 characters", key="reg_pw")

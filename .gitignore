@@ -25,6 +25,10 @@ __pycache__/
 .env
 .env.*
 
+# Streamlit secrets — NEVER commit this file
+# Add your secrets in Streamlit Community Cloud App Settings → Secrets
+.streamlit/secrets.toml
+
 # IDE
 .vscode/
 .idea/

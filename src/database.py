@@ -5,6 +5,7 @@ Manages multi-tenant hospital metadata, doctor profiles, patient clinical detail
 and historical cognitive/arousal assessment trends.
 """
 
+import os
 import sqlite3
 import json
 import hashlib
@@ -18,8 +19,11 @@ DB_PATH = Path("data/cognicare.db")
 
 
 def hash_password(password: str) -> str:
-    """Helper to hash doctor passwords using salted SHA-256."""
-    salt = "cognicare_secret_salt_2026"
+    """Helper to hash doctor passwords using salted SHA-256.
+    Salt is read from COGNICARE_SECRET_SALT environment variable,
+    populated at startup from st.secrets by app.py.
+    """
+    salt = os.environ.get("COGNICARE_SECRET_SALT", "cognicare_default_dev_salt")
     return hashlib.sha256((password + salt).encode("utf-8")).hexdigest()
 
 
@@ -136,18 +140,23 @@ class DatabaseService:
             if cursor.fetchone()[0] > 0:
                 return  # Database is already populated
 
-            # 1. Add Clinic
+            # 1. Add Clinic — credentials sourced from env vars (set from st.secrets in app.py)
+            demo_hospital_name = os.environ.get("DEMO_HOSPITAL_NAME", "Neo-General Hospital")
+            demo_clinic_code   = os.environ.get("DEMO_CLINIC_CODE", "NEO-GEN")
             cursor.execute(
                 "INSERT INTO hospitals (name, registration_code, created_at) VALUES (?, ?, ?)",
-                ("Neo-General Hospital", "NEO-GEN", datetime.now().isoformat())
+                (demo_hospital_name, demo_clinic_code, datetime.now().isoformat())
             )
             hospital_id = cursor.lastrowid
 
             # 2. Add Doctor
-            doctor_pwd = hash_password("password123")
+            demo_doctor_name     = os.environ.get("DEMO_DOCTOR_NAME", "Dr. Evelyn Vance")
+            demo_doctor_email    = os.environ.get("DEMO_DOCTOR_EMAIL", "demo@cognicare.com")
+            demo_doctor_password = os.environ.get("DEMO_DOCTOR_PASSWORD", "demo_password")
+            doctor_pwd = hash_password(demo_doctor_password)
             cursor.execute(
                 "INSERT INTO doctors (hospital_id, name, email, password_hash, created_at) VALUES (?, ?, ?, ?, ?)",
-                (hospital_id, "Dr. Evelyn Vance", "evelyn@cognicare.com", doctor_pwd, datetime.now().isoformat())
+                (hospital_id, demo_doctor_name, demo_doctor_email, doctor_pwd, datetime.now().isoformat())
             )
             doctor_id = cursor.lastrowid
 
