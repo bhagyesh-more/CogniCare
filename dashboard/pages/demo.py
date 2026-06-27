@@ -68,7 +68,7 @@ def render(df: pd.DataFrame, session_state: dict, rai) -> None:
                 _render_profile_card(profile, session_state, rai)
 
     # ── Results area ─────────────────────────────────────────────
-    if "demo_result" in session_state and session_state["demo_result"]:
+    if st.session_state.get("demo_result"):
         st.markdown(neon_divider(), unsafe_allow_html=True)
         _render_demo_results(session_state, rai)
 

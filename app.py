@@ -27,15 +27,12 @@ from dashboard.pages import (
     dataset, demo, landing, auth, patients
 )
 
-# Force reload modules to prevent Streamlit from using cached signatures
+# Force reload of ML-dependent pages to prevent Streamlit from using stale cached signatures
 importlib.reload(mission_control)
 importlib.reload(analysis)
 importlib.reload(physio)
 importlib.reload(dataset)
 importlib.reload(demo)
-importlib.reload(landing)
-importlib.reload(auth)
-importlib.reload(patients)
 from src.monitoring import Monitor
 from src.validator import Validator
 from src.database import DatabaseService
@@ -278,8 +275,15 @@ def main() -> None:
             dataset_hash = len(df)
             rai = load_rai(dataset_hash)
             st.session_state["rai_loaded"] = True
-        except Exception:
+        except Exception as e:
             st.session_state["rai_loaded"] = False
+            logging.exception("Failed to load RAI engines: %s", e)
+            # Show a visible warning so the failure is diagnosable
+            st.warning(
+                f"⚠️ AI engines failed to load: `{type(e).__name__}: {e}`. "
+                "Demo Mode and Cognitive Analysis will be unavailable. "
+                "Check that models/arousal/ and models/cognitive_load/ exist."
+            )
     else:
         st.session_state["rai_loaded"] = False
 
