@@ -22,8 +22,18 @@ FEATURE_COLS = [
     "heart_rate_bpm", "rmssd", "sdnn", "resp_rate_bpm", "resp_variability",
 ]
 
-# Plausible z-score range: beyond ±6 std almost certainly an input error
-_Z_CLIP = 6.0
+# Realistic physiological ranges for validation
+RAW_RANGES = {
+    "eda_mean": (0.0, 20.0),
+    "eda_std": (0.0, 10.0),
+    "eda_peak_count": (0.0, 100.0),
+    "eda_peak_amplitude": (0.0, 10.0),
+    "heart_rate_bpm": (40.0, 180.0),
+    "rmssd": (5.0, 250.0),
+    "sdnn": (10.0, 300.0),
+    "resp_rate_bpm": (5.0, 40.0),
+    "resp_variability": (0.0, 20.0),
+}
 
 MODELS_DIR = Path("models")
 _REQUIRED_ARTIFACTS = ["model.pkl", "scaler.pkl", "feature_metadata.json"]
@@ -110,12 +120,20 @@ class Validator:
             val = data.get(col)
             if val is None:
                 continue
-            if not np.isfinite(float(val)):
+            try:
+                fval = float(val)
+            except (ValueError, TypeError):
+                result.add_error(f"Feature '{col}' must be a numeric value.")
+                continue
+            if not np.isfinite(fval):
                 result.add_error(f"Feature '{col}' is not finite ({val}).")
-            elif abs(float(val)) > _Z_CLIP:
-                result.add_warning(
-                    f"Feature '{col}' = {val:.3f} is outside the expected z-score "
-                    f"range [-{_Z_CLIP}, +{_Z_CLIP}]. Prediction may be unreliable."
+                continue
+
+            min_v, max_v = RAW_RANGES[col]
+            if not (min_v <= fval <= max_v):
+                result.add_error(
+                    f"Feature '{col}' = {fval:.3f} is outside the allowed physiological "
+                    f"range [{min_v}, {max_v}]."
                 )
 
     @staticmethod
@@ -151,14 +169,22 @@ class Validator:
         for col in FEATURE_COLS:
             if col not in df.columns:
                 continue
-            extreme = (df[col].abs() > _Z_CLIP).sum()
-            if extreme > 0:
-                result.add_warning(
-                    f"{extreme} row(s) in '{col}' exceed z-score ±{_Z_CLIP}. "
-                    f"Predictions for these rows may be unreliable."
+            # Check for non-finite values in df
+            non_finite = (~np.isfinite(df[col])).sum()
+            if non_finite > 0:
+                result.add_error(f"Column '{col}' contains {non_finite} non-finite value(s).")
+                continue
+
+            min_v, max_v = RAW_RANGES[col]
+            out_of_range = ((df[col] < min_v) | (df[col] > max_v)).sum()
+            if out_of_range > 0:
+                result.add_error(
+                    f"{out_of_range} row(s) in '{col}' fall outside the allowed physiological "
+                    f"range [{min_v}, {max_v}]."
                 )
 
         if len(df) > 10_000:
             result.add_warning(
                 f"Large batch: {len(df)} rows. Processing may take several seconds."
             )
+

@@ -18,6 +18,7 @@ from dashboard.components import (
 )
 from src.validator import Validator
 from src.report_generator import ReportGenerator
+from src.data_cleaner import DataCleaner
 
 _validator = Validator()
 
@@ -25,6 +26,58 @@ FEATURE_COLS = [
     "eda_mean", "eda_std", "eda_peak_count", "eda_peak_amplitude",
     "heart_rate_bpm", "rmssd", "sdnn", "resp_rate_bpm", "resp_variability",
 ]
+
+
+def preprocess_raw_features(data: dict | pd.DataFrame) -> dict | pd.DataFrame:
+    """
+    Applies the preprocessing pipeline used during training to raw physiological inputs.
+    Converts RMSSD and SDNN from milliseconds (ms) to seconds (s).
+    Standardizes each feature using the baseline WESAD statistics and DataCleaner.
+    """
+    import numpy as np
+
+    WESAD_STATS = {
+        "eda_mean": {"mean": 5.03021690, "std": 3.00460941},
+        "eda_std": {"mean": 0.09633747, "std": 0.09998216},
+        "eda_peak_count": {"mean": 5243.71348315, "std": 4414.93447238},
+        "eda_peak_amplitude": {"mean": 0.02966375, "std": 0.00897963},
+        "heart_rate_bpm": {"mean": 69.18039864, "std": 10.48383984},
+        "rmssd": {"mean": 0.06474043, "std": 0.03874872},
+        "sdnn": {"mean": 0.08138460, "std": 0.03333514},
+        "resp_rate_bpm": {"mean": 32.02247191, "std": 2.00268095},
+        "resp_variability": {"mean": 0.45839002, "std": 0.06614139},
+    }
+
+    if isinstance(data, dict):
+        df = pd.DataFrame([data])
+        # Convert RMSSD and SDNN from ms to seconds
+        df["rmssd"] = df["rmssd"] / 1000.0
+        df["sdnn"] = df["sdnn"] / 1000.0
+
+        cleaner = DataCleaner()
+        cleaner._feature_cols = FEATURE_COLS
+        cleaner.scaler.mean_ = np.array([WESAD_STATS[c]["mean"] for c in FEATURE_COLS])
+        cleaner.scaler.scale_ = np.array([WESAD_STATS[c]["std"] for c in FEATURE_COLS])
+        cleaner.scaler.var_ = cleaner.scaler.scale_ ** 2
+        cleaner.scaler.n_samples_seen_ = 178
+
+        df_scaled = cleaner.transform(df)
+        return df_scaled.iloc[0].to_dict()
+    else:
+        df = data.copy()
+        # Convert RMSSD and SDNN from ms to seconds
+        df["rmssd"] = df["rmssd"] / 1000.0
+        df["sdnn"] = df["sdnn"] / 1000.0
+
+        cleaner = DataCleaner()
+        cleaner._feature_cols = FEATURE_COLS
+        cleaner.scaler.mean_ = np.array([WESAD_STATS[c]["mean"] for c in FEATURE_COLS])
+        cleaner.scaler.scale_ = np.array([WESAD_STATS[c]["std"] for c in FEATURE_COLS])
+        cleaner.scaler.var_ = cleaner.scaler.scale_ ** 2
+        cleaner.scaler.n_samples_seen_ = 178
+
+        df_scaled = cleaner.transform(df)
+        return df_scaled[FEATURE_COLS]
 
 
 def _run_prediction(data: dict, rai, session_state: dict, db_service, patient_id: str, doctor_id: int) -> tuple:
@@ -159,7 +212,7 @@ def render(df: pd.DataFrame, session_state: dict, rai, db_service, doctor_user) 
         info_html = (
             '<div class="section-label" style="margin-bottom:4px">Physiological Signal Input</div>'
             f'<div style="font-size:0.72rem;color:{C["secondary"]};font-family:var(--font-data);margin-top:2px">'
-            'Enter normalised (StandardScaler) feature values. Values shown are z-scores from WESAD baseline distribution.'
+            'Enter raw clinical physiological measurements. The application will validate their clinical plausibility and scale them for ML inference.'
             '</div>'
         )
         st.markdown(glass_card(info_html, "cyan"), unsafe_allow_html=True)
@@ -170,29 +223,29 @@ def render(df: pd.DataFrame, session_state: dict, rai, db_service, doctor_user) 
         st.markdown(f'<div class="section-label" style="margin-bottom:8px;color:{C["cyan"]}">⬡ EDA - Electrodermal Activity</div>', unsafe_allow_html=True)
         c1, c2, c3, c4 = st.columns(4)
         with c1:
-            eda_mean      = st.number_input("EDA Mean (µS)",      min_value=-5.0, max_value=5.0, value=0.0, step=0.01, key="m_eda_mean")
+            eda_mean      = st.number_input("EDA Mean (µS)",      min_value=0.0, max_value=20.0, value=5.0, step=0.01, key="m_eda_mean")
         with c2:
-            eda_std       = st.number_input("EDA Std Dev",        min_value=-5.0, max_value=5.0, value=0.0, step=0.01, key="m_eda_std")
+            eda_std       = st.number_input("EDA Standard Deviation (µS)", min_value=0.0, max_value=10.0, value=0.1, step=0.01, key="m_eda_std")
         with c3:
-            eda_peak_cnt  = st.number_input("EDA Peak Count",     min_value=-5.0, max_value=5.0, value=0.0, step=0.1,  key="m_eda_pc")
+            eda_peak_cnt  = st.number_input("EDA Peak Count",     min_value=0.0, max_value=100.0, value=15.0, step=1.0,  key="m_eda_pc")
         with c4:
-            eda_peak_amp  = st.number_input("EDA Peak Amplitude", min_value=-5.0, max_value=5.0, value=0.0, step=0.01, key="m_eda_pa")
+            eda_peak_amp  = st.number_input("EDA Peak Amplitude (µS)", min_value=0.0, max_value=10.0, value=0.1, step=0.01, key="m_eda_pa")
 
         st.markdown(f'<div class="section-label" style="margin:8px 0;color:{C["purple"]}">♡ HRV - Heart Rate Variability</div>', unsafe_allow_html=True)
         h1, h2, h3 = st.columns(3)
         with h1:
-            hr_bpm        = st.number_input("Heart Rate (z)",     min_value=-5.0, max_value=5.0, value=0.0, step=0.01, key="m_hr")
+            hr_bpm        = st.number_input("Heart Rate (BPM)",     min_value=40.0, max_value=180.0, value=75.0, step=1.0, key="m_hr")
         with h2:
-            rmssd         = st.number_input("RMSSD (z)",          min_value=-5.0, max_value=5.0, value=0.0, step=0.001,key="m_rmssd")
+            rmssd         = st.number_input("RMSSD (ms)",          min_value=5.0, max_value=250.0, value=40.0, step=1.0, key="m_rmssd")
         with h3:
-            sdnn          = st.number_input("SDNN (z)",           min_value=-5.0, max_value=5.0, value=0.0, step=0.001,key="m_sdnn")
+            sdnn          = st.number_input("SDNN (ms)",           min_value=10.0, max_value=300.0, value=55.0, step=1.0, key="m_sdnn")
 
         st.markdown(f'<div class="section-label" style="margin:8px 0;color:{C["green"]}">≈ Respiration</div>', unsafe_allow_html=True)
         r1, r2 = st.columns(2)
         with r1:
-            resp_rate     = st.number_input("Resp. Rate (z)",     min_value=-5.0, max_value=5.0, value=0.0, step=0.01, key="m_rr")
+            resp_rate     = st.number_input("Respiration Rate (breaths/min)", min_value=5.0, max_value=40.0, value=14.0, step=0.1, key="m_rr")
         with r2:
-            resp_var      = st.number_input("Resp. Variability (z)", min_value=-5.0, max_value=5.0, value=0.0, step=0.001,key="m_rv")
+            resp_var      = st.number_input("Respiration Variability", min_value=0.0, max_value=20.0, value=2.1, step=0.01, key="m_rv")
 
         sample = {
             "eda_mean": eda_mean, "eda_std": eda_std,
@@ -205,7 +258,7 @@ def render(df: pd.DataFrame, session_state: dict, rai, db_service, doctor_user) 
         run_btn = st.button("⚡  Run Cognitive Analysis", type="primary", key="run_manual")
 
         if run_btn:
-            # Validate before inference
+            # Validate raw sample before inference
             val = _validator.validate_sample(sample)
             for w in val.warnings:
                 st.warning(w)
@@ -214,11 +267,14 @@ def render(df: pd.DataFrame, session_state: dict, rai, db_service, doctor_user) 
                     st.error(e)
             else:
                 with st.spinner("Analysing physiological signals..."):
+                    # Preprocess raw features to WESAD standard scaled z-scores for inference
+                    scaled_sample = preprocess_raw_features(sample)
+                    
                     a_class, a_conf, c_class, c_conf, a_proba, c_proba, sid = \
-                        _run_prediction(sample, rai, session_state, db_service, active_patient_id, doctor_user["id"])
+                        _run_prediction(scaled_sample, rai, session_state, db_service, active_patient_id, doctor_user["id"])
 
                 st.markdown(neon_divider(), unsafe_allow_html=True)
-                _render_results(a_class, a_conf, c_class, c_conf, a_proba, c_proba, sid, sample, rai)
+                _render_results(a_class, a_conf, c_class, c_conf, a_proba, c_proba, sid, scaled_sample, rai)
 
     # ── Tab B: CSV Upload ────────────────────────────────────────
     with tab_csv:
@@ -243,93 +299,106 @@ def render(df: pd.DataFrame, session_state: dict, rai, db_service, doctor_user) 
                 if missing:
                     st.error(f"Missing columns: {missing}")
                 else:
-                    st.markdown(f"""
-                    <div style="font-size:0.75rem;color:{C['secondary']};margin:8px 0;font-family:var(--font-data)">
-                        Loaded <span style="color:{C['cyan']};font-weight:600">{len(upload_df)}</span> rows
-                        &nbsp;|&nbsp;
-                        <span style="color:{C['green']};font-weight:600">{len(FEATURE_COLS)}</span> features detected
-                    </div>
-                    """, unsafe_allow_html=True)
+                    # Validate the raw uploaded dataframe
+                    val = _validator.validate_dataframe(upload_df)
+                    for w in val.warnings:
+                        st.warning(w)
+                    if not val.valid:
+                        for e in val.errors:
+                            st.error(e)
+                    else:
+                        st.markdown(f"""
+                        <div style="font-size:0.75rem;color:{C['secondary']};margin:8px 0;font-family:var(--font-data)">
+                            Loaded <span style="color:{C['cyan']};font-weight:600">{len(upload_df)}</span> rows
+                            &nbsp;|&nbsp;
+                            <span style="color:{C['green']};font-weight:600">{len(FEATURE_COLS)}</span> features detected
+                        </div>
+                        """, unsafe_allow_html=True)
 
-                    if st.button("⚡  Run Batch Analysis", type="primary", key="run_csv"):
-                        with st.spinner(f"Processing and saving {len(upload_df)} samples to patient timeline..."):
-                            # Iterate and run prediction/explanation for database
-                            for idx, row in upload_df.iterrows():
-                                row_dict = row[FEATURE_COLS].to_dict()
+                        if st.button("⚡  Run Batch Analysis", type="primary", key="run_csv"):
+                            with st.spinner(f"Processing and saving {len(upload_df)} samples to patient timeline..."):
+                                # Preprocess the entire DataFrame to standard scaled features
+                                upload_df_scaled = preprocess_raw_features(upload_df)
                                 
-                                # Run inference
-                                arousal_res = rai.prediction.predict_emotional_arousal(row_dict)
-                                cog_res     = rai.prediction.predict_cognitive_load(row_dict)
+                                # Iterate and run prediction/explanation for database
+                                for idx, row in upload_df_scaled.iterrows():
+                                    row_dict = row[FEATURE_COLS].to_dict()
+                                    
+                                    # Run inference
+                                    arousal_res = rai.prediction.predict_emotional_arousal(row_dict)
+                                    cog_res     = rai.prediction.predict_cognitive_load(row_dict)
 
-                                arousal_proba = {c: float(arousal_res[f"prob_{c}"].iloc[0]) for c in rai.prediction._artifacts["arousal"]["label_encoder"].classes_}
-                                cog_proba = {c: float(cog_res[f"prob_{c}"].iloc[0]) for c in rai.prediction._artifacts["cognitive_load"]["label_encoder"].classes_}
+                                    arousal_proba = {c: float(arousal_res[f"prob_{c}"].iloc[0]) for c in rai.prediction._artifacts["arousal"]["label_encoder"].classes_}
+                                    cog_proba = {c: float(cog_res[f"prob_{c}"].iloc[0]) for c in rai.prediction._artifacts["cognitive_load"]["label_encoder"].classes_}
 
-                                a_c = rai._confidence["arousal"].evaluate(list(arousal_proba.values()))
-                                c_c = rai._confidence["cognitive_load"].evaluate(list(cog_proba.values()))
+                                    a_c = rai._confidence["arousal"].evaluate(list(arousal_proba.values()))
+                                    c_c = rai._confidence["cognitive_load"].evaluate(list(cog_proba.values()))
 
-                                # SHAP
-                                with rai.privacy.session() as sess_id:
-                                    r_res = rai.explain_prediction(session_id=sess_id, target="cognitive_load", data=row_dict, top_n=3, sanitise=False)
-                                
-                                t_feats = [{"feature": fc.feature, "label": fc.label, "direction": fc.direction, "shap_value": fc.shap_value} for fc in r_res.top_features]
+                                    # SHAP
+                                    with rai.privacy.session() as sess_id:
+                                        r_res = rai.explain_prediction(session_id=sess_id, target="cognitive_load", data=row_dict, top_n=3, sanitise=False)
+                                    
+                                    t_feats = [{"feature": fc.feature, "label": fc.label, "direction": fc.direction, "shap_value": fc.shap_value} for fc in r_res.top_features]
 
-                                # Log to SQLite
-                                db_service.log_assessment(
-                                    patient_id=active_patient_id,
-                                    doctor_id=doctor_user["id"],
-                                    session_id=sess_id,
-                                    inputs=row_dict,
-                                    a_pred=arousal_res["predicted_class"].iloc[0],
-                                    a_conf=a_c.confidence_pct / 100,
-                                    a_tier=a_c.tier,
-                                    a_narrative=r_res.narrative,
-                                    c_pred=cog_res["predicted_class"].iloc[0],
-                                    c_conf=c_c.confidence_pct / 100,
-                                    c_tier=c_c.tier,
-                                    c_narrative=r_res.narrative,
-                                    shap_list=t_feats,
-                                    flag_review=1 if (a_c.flag_review or c_c.flag_review) else 0
-                                )
+                                    # Log to SQLite (logs standardized z-score values)
+                                    db_service.log_assessment(
+                                        patient_id=active_patient_id,
+                                        doctor_id=doctor_user["id"],
+                                        session_id=sess_id,
+                                        inputs=row_dict,
+                                        a_pred=arousal_res["predicted_class"].iloc[0],
+                                        a_conf=a_c.confidence_pct / 100,
+                                        a_tier=a_c.tier,
+                                        a_narrative=r_res.narrative,
+                                        c_pred=cog_res["predicted_class"].iloc[0],
+                                        c_conf=c_c.confidence_pct / 100,
+                                        c_tier=c_c.tier,
+                                        c_narrative=r_res.narrative,
+                                        shap_list=t_feats,
+                                        flag_review=1 if (a_c.flag_review or c_c.flag_review) else 0
+                                    )
 
-                        results_df = upload_df[FEATURE_COLS].copy()
-                        # Run a quick batch call for grid view display
-                        arousal_preds = rai.prediction.predict_emotional_arousal(upload_df)
-                        cog_preds     = rai.prediction.predict_cognitive_load(upload_df)
-                        
-                        results_df["arousal_prediction"]       = arousal_preds["predicted_class"].values
-                        results_df["arousal_confidence"]       = (arousal_preds["confidence"] * 100).round(1).values
-                        results_df["cognitive_load_prediction"]= cog_preds["predicted_class"].values
-                        results_df["cognitive_load_confidence"]= (cog_preds["confidence"] * 100).round(1).values
+                            # Make results_df contain the scaled features, matching training z-score space
+                            results_df = upload_df_scaled[FEATURE_COLS].copy()
+                            
+                            # Run a quick batch call for grid view display using scaled features
+                            arousal_preds = rai.prediction.predict_emotional_arousal(upload_df_scaled)
+                            cog_preds     = rai.prediction.predict_cognitive_load(upload_df_scaled)
+                            
+                            results_df["arousal_prediction"]       = arousal_preds["predicted_class"].values
+                            results_df["arousal_confidence"]       = (arousal_preds["confidence"] * 100).round(1).values
+                            results_df["cognitive_load_prediction"]= cog_preds["predicted_class"].values
+                            results_df["cognitive_load_confidence"]= (cog_preds["confidence"] * 100).round(1).values
 
-                        session_state["total_predictions"] = \
-                            session_state.get("total_predictions", 0) + len(upload_df) * 2
+                            session_state["total_predictions"] = \
+                                session_state.get("total_predictions", 0) + len(upload_df) * 2
 
-                        st.markdown(neon_divider(), unsafe_allow_html=True)
-                        st.markdown(section_header("Batch Results Logged", f"{len(results_df)} assessments saved", "▦"), unsafe_allow_html=True)
+                            st.markdown(neon_divider(), unsafe_allow_html=True)
+                            st.markdown(section_header("Batch Results Logged", f"{len(results_df)} assessments saved", "▦"), unsafe_allow_html=True)
 
-                        # Summary KPIs
-                        b1, b2, b3, b4 = st.columns(4)
-                        with b1:
-                            st.markdown(kpi_card(str(len(results_df)), "Samples Saved", "▦", C["cyan"]), unsafe_allow_html=True)
-                        with b2:
-                            avg_a = results_df["arousal_confidence"].mean()
-                            st.markdown(kpi_card(f"{avg_a:.1f}%", "Avg Arousal Conf.", "◎", C["purple"]), unsafe_allow_html=True)
-                        with b3:
-                            avg_c = results_df["cognitive_load_confidence"].mean()
-                            st.markdown(kpi_card(f"{avg_c:.1f}%", "Avg Load Conf.", "◎", C["green"]), unsafe_allow_html=True)
-                        with b4:
-                            high_n = (results_df["arousal_prediction"] == "High").sum()
-                            st.markdown(kpi_card(str(high_n), "High Arousal Rows", "⚠", C["pink"]), unsafe_allow_html=True)
+                            # Summary KPIs
+                            b1, b2, b3, b4 = st.columns(4)
+                            with b1:
+                                st.markdown(kpi_card(str(len(results_df)), "Samples Saved", "▦", C["cyan"]), unsafe_allow_html=True)
+                            with b2:
+                                avg_a = results_df["arousal_confidence"].mean()
+                                st.markdown(kpi_card(f"{avg_a:.1f}%", "Avg Arousal Conf.", "◎", C["purple"]), unsafe_allow_html=True)
+                            with b3:
+                                avg_c = results_df["cognitive_load_confidence"].mean()
+                                st.markdown(kpi_card(f"{avg_c:.1f}%", "Avg Load Conf.", "◎", C["green"]), unsafe_allow_html=True)
+                            with b4:
+                                high_n = (results_df["arousal_prediction"] == "High").sum()
+                                st.markdown(kpi_card(str(high_n), "High Arousal Rows", "⚠", C["pink"]), unsafe_allow_html=True)
 
-                        st.dataframe(results_df, use_container_width=True, height=250)
+                            st.dataframe(results_df, use_container_width=True, height=250)
 
-                        csv_out = results_df.to_csv(index=False).encode("utf-8")
-                        st.download_button(
-                            "⬇  Download Results CSV",
-                            data=csv_out,
-                            file_name="cogniarousal_batch_results.csv",
-                            mime="text/csv",
-                        )
+                            csv_out = results_df.to_csv(index=False).encode("utf-8")
+                            st.download_button(
+                                "⬇  Download Results CSV",
+                                data=csv_out,
+                                file_name="cogniarousal_batch_results.csv",
+                                mime="text/csv",
+                            )
 
             except Exception as exc:
                 st.error(f"CSV processing error: {exc}. Check that all 9 feature columns are present and numeric.")
